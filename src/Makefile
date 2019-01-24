@@ -1,4 +1,3 @@
-
 CC=gcc
 INCLUDE=-I/usr/lib/jvm/java-8-openjdk-amd64/include/ -I/usr/lib/jvm/java-8-openjdk-amd64/include/linux/
 CFLAGS=-c -fpic $(INCLUDE)
@@ -16,7 +15,7 @@ interface_c_java_wrap.o:
 	$(CC) $(CFLAGS)  interface_c_java_wrap.c
 
 java:
-	javac *.java
+	javac -target 1.8 -source 1.8 *.java
 
 run:
 	appletviewer  -J"-Djava.security.policy=applet.policy" demo.html 
