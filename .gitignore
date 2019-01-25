@@ -1,3 +1,7 @@
+tags
+types_c.taghl
+types_java.taghl
+
 src/FluidSolver.class
 src/WebStart.class
 src/fluid.class
@@ -8,6 +12,10 @@ src/fluidJNI.java
 src/interface_c_java_wrap.c
 src/interface_c_java_wrap.o
 src/libfluid.so
-tags
-types_c.taghl
-types_java.taghl
+
+report/_minted-report/*
+report/report.aux
+report/report.log
+report/report.out
+report/report.toc
+report/svg-inkscape/*
