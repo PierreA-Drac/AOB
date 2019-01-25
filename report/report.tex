@@ -184,12 +184,57 @@
 \newpage
 \begin{abstract}
 
+La simulation numérique est un procédé informatique visant à modéliser un
+phénomène par ordinateur, s’agissant le plus souvent d’un phénomène
+physique. Cette modélisation prend forme par des systèmes d’équations
+décrivant l’état du système physique représenté à chaque instant. De
+nombreux domaines scientifiques convergent vers la simulation
+informatique, tel que certaines branches de la physique, de l’analyse
+et de l’optimisation mathématique, ou encore le calcul haute
+performance en informatique. Enfin, la simulation trouve naturellement
+de nombreuses applications concernant des sujets variés, tel que la
+simulation du climat et des évènements météorologiques, la simulation
+d’essais nucléaires, de l’effet d’un médicament sur un corps, ou encore
+des astres et de l’univers. Ce rapport s’articulera donc autour de la
+simulation de fumée, phénomène impliquant les lois de la mécanique des
+fluides. Notre travail portera sur l’aspect du calcul haute performance
+de cette simulation.
+
 \end{abstract}
 
 \tableofcontents
 
 \section{Introduction}
 \label{sec.intro}
+
+Le projet que nous vous présentons aujourd’hui consiste à analyser puis,
+grâce à nos mesures, optimiser un code de simulation numérique. Ce dernier
+nous offre une interface graphique permettant d’ajouter de la fumée dans un
+espace confiné et, ainsi, d’en observer le comportement. Nous pouvons
+influencer la quantité de fumée et sa vélocité dans l’espace. De plus,
+l’application nous donne le contrôle sur la résolution de la simulation,
+cela revient à dire sur sa précision, qui détermine principalement la
+performance du programme.
+
+Le déroulement du projet s’est effectué en plusieurs étapes distinctes :
+\begin{description}
+    \item[Analyse du code] Cette phase consiste à analyser le programme
+        d’un point de vue mathématique et informatique. De cette première
+        approche, il s’agira de comprendre les opérations du programme sur
+        les équations qui régissent le système physique. De l’autre
+        approche, il convient d’étudier l’architecture logicielle de
+        l’application, ainsi que les choix mis en œuvres afin d’implémenter
+        le ou les algorithmes nécessaires.
+    \item[Protocole expérimental] Une fois l’analyse effectuée, nous
+        pouvons en déduire le moyen le plus adapté afin de mesurer les
+        performances de notre implémentation. Nous allons donc mettre en
+        avant les critères théoriques à atteindre dans nos mesures, puis
+        nous exposerons la manière dont nous avons mis ceci en pratique.
+    \item[Optimisations et mesures] Grâce au protocole mis en place, nous
+        pouvons quantifier la performance du programme. De ce fait, serons
+        en mesure d’expérimenter différentes techniques d’optimisation sur
+        le programme et d’en calculer l’accélération.
+\end{description}
 
 \section{Analyse du code}
 \label{sec.analyze}
@@ -215,7 +260,7 @@
 \subsection{Pratique}
 \label{sub.prot.pract}
 
-\section{Optimisations}
+\section{Optimisations et mesures}
 \label{sec.optim}
 
 \subsection{Déroulage de boucle}
@@ -229,6 +274,10 @@
 
 \section{Conclusion}
 \label{sec.conc}
+
+\newpage
+\section*{Acronymes}
+\label{sec.acro}
 
 \begin{acronym}
     \acro{CPU}  {Central Processing Unit\acroextra{, processeur central de l'ordinateur}}
