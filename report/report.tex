@@ -329,13 +329,14 @@ une valeur moyenne ou une valeur médiane.
 
 Pour effectuer nos mesures, il nous faut utiliser un outil de d’analyse de
 performance. Plusieurs possibilités s’offrent à nous, parmi lesquels nous
-pouvons notamment citer : Performance Counters for Linux (perf), OProfile,
-Gprof, MAQAO, Callgrind/Kcachegrind, et bien d’autre. Parmi ces choix-là, nous
-avons choisis d’utiliser \enquote{perf}. Nous pouvons lui citer plusieurs
-avantages qui nous ont intéressés : intégration en ligne de commande, outil
-bas-niveau, développement stable, accès aux compteurs hardware. Nous pouvons
-donc en déduire que c’est un outil tout à fait adapter à l’analyse de code
-bas-niveau (C, assembleur).
+pouvons notamment citer : \textbf{Performance Counters for Linux (perf)},
+\textbf{OProfile}, \textbf{Gprof}, \textbf{MAQAO},
+\textbf{Callgrind/Kcachegrind}, et bien d’autre. Parmi ces choix-là, nous avons
+choisis d’utiliser \textbf{perf}. Nous pouvons lui citer plusieurs avantages qui
+nous ont intéressés : intégration en ligne de commande, outil bas-niveau,
+développement stable, accès aux compteurs hardware. Nous pouvons donc en déduire
+que c’est un outil tout à fait adapter à l’analyse de code bas-niveau (C,
+assembleur).
 
 Le programme de simulation utilise une interface graphique pour rentrer en
 interaction avec l’utilisateur. De ce fait, nous ne pouvons pas lui donner un
@@ -375,7 +376,7 @@ nous allons partir pour optimiser notre code. Nous ajoutons tout d’abord
 \enquote{-g3} afin d’inclure dans le binaire les symboles et informations sur le
 code source. Nous nous assurons que ce flag n’as pas d’incidence sur les
 performances. Ci-dessous les résultats des analyses du projet au départ, avec
-\ac{GCC} :
+\ac{GCC}.
 
 \begin{figure}[h]
     \centering
@@ -393,7 +394,7 @@ programme : inférieure à $3\%$ pour la plus chaude. À elle seule, la fonctio
 \enquote{linearSolver()} prend presque $50\%$ du temps d’exécution du
 programme : c’est la plus importante.
 
-\begin{figure}[h]
+\begin{figure}
     \centering
     \includegraphics[scale=0.6]{figures/optims/gcc-O0/linearSolver-others.png}
     \\ \phantom{ } \\
@@ -412,7 +413,7 @@ On identifie donc parfaitement les deux sources de ralentissement de la
 fonction : la première étant un trop grand nombre d’instructions pour effectuer
 les calculs et la seconde étant la division.
 
-\begin{figure}[h]
+\begin{figure}
     \centering
     \includegraphics[scale=0.40]{figures/optims/gcc-O0/build_index.png}
     \\ \phantom{ } \\
@@ -440,7 +441,7 @@ fonctions \textit{stubs} (wrapper) qui sont appelées à la place de la vraie
 fonction. Cette fonction stub (@plt) permet d’aller consulter la \ac{GOT}, de
 remplir la \ac{GOT} lors du premier appel (\textit{lazy loader}), enfin
 d’exécuter la vraie fonction. Toutes les prochaines fois ou la fonction stub
-sera appelée, alors on va directement chargé l’adresse contenu dans la
+sera appelée, alors on va directement charger l’adresse contenu dans la
 \textit{GOT} pour appeler la fonction désirée.
 
 \subsection{Mise en place de la compilation}
@@ -453,19 +454,93 @@ du code). L’utilisation d’un de ces flags nous apporte une légère amélior
 de fluidité visuelle, cependant il se trouve que nous n’avons pas observé de
 différence majeure entre ces 4 différentes flags, que ce soit en termes de code
 généré ou de performances et répartition du temps entre les fonctions.
-Ci-dessous les images des résultats avec \ac{GCC} et \enquote{-O2} :
-% TODO
+Ci-dessous les images des résultats avec \ac{GCC} et \enquote{-O2}.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.58]{figures/optims/gcc-O2/global.png}
+    \caption{Profilage global avec \ac{GCC} en \enquote{-O2}}
+    \label{fig.optim.compil.gcc.global}
+\end{figure}
+
+Au premier abord de la Figure~\ref{fig.optim.compil.gcc.global}, nous pourrions
+être étonnés que la fonction \enquote{linearSolver()} soit passée de $46\%$ à
+$57\%$, comme si l’optimisation par le compilateur l’avait rendu plus lente. En
+fait il n’en est rien : on passe en effet plus de temps dans la fonction
+\enquote{linearSolver()} car on passe moins de temps dans les autres fonctions,
+ces dernières étant elles aussi optimisées. En effet, on voit que le temps passé
+dans la fonction \enquote{build\_index()} est passé de $24\%$ à $10\%$. Enfin,
+il en va de même pour le temps qui a augmenté de $3\%$ pour
+\enquote{build\_index@plt} : puisque \enquote{build\_index()} est plus courte,
+alors on passe autant de temps à appeler la fonction qu’à effectuer les calculs.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.35]{figures/optims/gcc-O2/linearSolver.png}
+    \caption{Profilage de \enquote{linearSolver()} avec \ac{GCC} en \enquote{-O2}}
+    \label{fig.optim.compil.gcc.linearSolver}
+\end{figure}
+
+Concernant la fonction \enquote{linearSolver()} de la
+Figure~\ref{fig.optim.compil.gcc.linearSolver}, on voit que le nombre
+d’instructions à nettement été réduit. On est passé de beaucoup d’instruction
+prenant chacune 1 à $4\%$ à quelques petites instructions et 3 instructions
+principales de 10 à 33\%. Ce nouveau schéma permettra sans doute de mieux cibler
+les instructions qui vont avoir besoin d’être optimisé.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.4]{figures/optims/gcc-O2/build_index.png}
+    \caption{Profilage de \enquote{build\_index()} avec \ac{GCC} en \enquote{-O2}}
+    \label{fig.optim.compil.gcc.build_index}
+\end{figure}
+
+Comme nous pouvons le constater sur la
+Figure~\ref{fig.optim.compil.gcc.build_index}, le code a été considérablement
+réduit et optimisé par le compilateur pour la fonction \enquote{build\_index()}.
+En effet, une grande partie des instructions ont été supprimés car on utilise un
+passage de valeur par registres (plus rapide) et non plus par la pile. De plus,
+on utilise l’instruction \textit{lea} spécialisé dans le calcul d’adresse.
+Finalement, il nous reste \textit{lea} qui prend 15\% de la fonction et le
+retour de la fonction qui prend 85\% du temps.
 
 Nous avons aussi testé les performances du programme avec
 \enquote{Clang/\ac{LLVM}}, et les flags d’optimisation les plus agressifs
-(\enquote{-03}). Ci-dessous les images des résultats avec Clang et \enquote{-O3}
-:
-% TODO
+(\enquote{-03}). Ci-dessous les images des résultats avec Clang et \enquote{-O3}.
 
-Nous observons donc un net gain à utiliser Clang par rapport à \ac{GCC}.
-Cependant, pour nous permettre d’appliquer des optimisations vu en cours à la
-main, nous allons opter pour la version que produit \ac{GCC} comme base de
-travail.
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.58]{figures/optims/clang-O3/global.png}
+    \caption{Profilage global avec Clang en \enquote{-O3}}
+    \label{fig.optim.compil.clang.global}
+\end{figure}
+
+Illustré par la Figure~\ref{fig.optim.compil.clang.global}, avec Clang et
+les options de compilation les plus agressives, on voit que le temps passés dans
+la fonction \enquote{linearSolver()} est passé de 57\% avec \ac{GCC} à 80\%.
+Encore une fois, cela veux dire que les autres fonctions ont été encore plus
+radicalement minimisées. On notera aussi les fonctions \enquote{build\_index()}
+et \enquote{build\_index@plt} ont complètement été supprimés. On observe aussi
+de nouvelles fonctions qui sont apparues, tel que
+\enquote{\_\_memmove\_avx\_unaligned\_erms()}, qui sous-entends une possible
+vectorisation avec les instructions apportées par \ac{AVX}.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.35]{figures/optims/clang-O3/linearSolver.png}
+    \caption{Profilage de \enquote{linearSolver()} avec Clang en \enquote{-O3}}
+    \label{fig.optim.compil.clang.linearSolver}
+\end{figure}
+
+Par la Figure~\ref{fig.optim.compil.clang.linearSolver}, nous observons que le
+code de \enquote{linearSolver()} a été extrêmement réduit en 5 instructions
+principales, introduites par \ac{SSE}. C’est vers ce genre de code que devrait
+converger nos optimisations manuelles.
+
+Nous observons donc un net gain à utiliser Clang par rapport à \ac{GCC}, qu'il
+soit visuel ou factuel. Cependant, pour nous permettre d’appliquer des
+optimisations vu en cours à la main, nous allons opter pour la version que
+produit \ac{GCC} comme base de travail.
 
 \subsection{Inlining}
 \label{sub.optim.inlin}
@@ -497,6 +572,8 @@ TODO
     \acro{PIC}  {Position-Independent Code}
     \acro{GOT}  {Global Offset Table}
     \acro{PLT}  {Procedure Linkage Table}
+    \acro{AVX}  {Advanced Vector Extensions}
+    \acro{SSE}  {Streaming SIMD Extensions}
 \end{acronym}
 
 \end{document}
