@@ -231,15 +231,27 @@ Le déroulement du projet s’est effectué en plusieurs étapes distinctes :
         avant les critères théoriques à atteindre dans nos mesures, puis
         nous exposerons la manière dont nous avons mis ceci en pratique.
     \item[Optimisations et mesures] Grâce au protocole mis en place, nous
-        pouvons quantifier la performance du programme. De ce fait, serons
-        en mesure d’expérimenter différentes techniques d’optimisation sur
-        le programme et d’en calculer l’accélération.
+        pouvons quantifier la performance du programme. De ce fait, nous serons
+        en mesure d’expérimenter différentes techniques d’optimisation sur le
+        programme et d’en calculer l’accélération.
 \end{description}
 
 \section{Analyse du code}
 \label{sec.analyze}
 
-\VerbatimInput[label=\fbox{\color{red!85!green!85!blue!85!}fluid.cflow},]{callgraph/fluid.cflow}
+% \VerbatimInput[label=\fbox{\color{red!85!green!85!blue!85!}fluid.cflow},]{callgraph/fluid.cflow}
+
+L'analyse du code est la première étape à effectuer afin d'optimiser un code. Il
+s'agit d'identifier les différentes sections et fonctions qui pourraient être
+critiques, ainsi que de comprendre mathématiquement quelles fonctions
+remplissent quels rôles.
+
+L’interface du programme et l’interaction avec l’utilisateur est géré par les
+fichiers \enquote{demo.html}, \enquote{FluidSolver.java} et
+\enquote{WebStart.java}. À priori, ces fichiers nous importe peu dans notre
+processus d’analyse et d’optimisation. Le cœur de la simulation se déroule dans
+le fichier \enquote{fluid.c}, dans lequel se situe les fonctions de calcul des
+phénomènes physique.
 
 \begin{figure}[h]
     \centering
@@ -251,17 +263,104 @@ Le déroulement du projet s’est effectué en plusieurs étapes distinctes :
     \label{fig.analyze.callgraph}
 \end{figure}
 
+Avant d'observer et d’analyser attentivement le code du fichier
+\enquote{fluid.c}, nous avons utilisé \textbf{Cflow} afin d’obtenir un graphe
+d’appel pour avoir une vue d’ensemble et observer les liens entre les fonctions.
+Le résultat est présenté dans la figure~\ref{fig.analyze.callgraph}. Nous
+décrivons ici les fonctions principales. On remarque très rapidement les deux
+points d’entrés du programme : \enquote{c\_densitySolver()} et
+\enquote{c\_velocitySolver()}. Ces deux fonctions sont utilisées conjointement
+pour assurer les deux fonctionnalités de notre simulation : la première permet
+de calculer la position d’une particule de fumée ajouté par la souris, la
+deuxième permet de calculer leur déplacement en fonction des différentes
+vélocités dans l’espace. Nous observons ensuite deux fonctions qui sont ici pour
+assurer des opérations physique : \enquote{project()} et \enquote{diffuse()}. Le
+nom laisse sous entendre que la première permet de faire une projection (des
+coordonnées d’un système à un autre ?) et la seconde permet de diffuser (une
+particule dans l’espace ?), mais nos connaissances en mécanique des fluides nous
+arrêtent ici pour les suppositions. Cependant, il est intéressant d’observer que
+ces deux fonctions font appel à une nouvelle fonction :
+\enquote{linearSolver()}. Cette fonction, comme le nom le laisse entendre, est
+le cœur de calcul de l’application : elle permet de résoudre un système
+d’équation linéaire. Il ne fait aucune doute que c’est dans cette fonction que
+de nombreuses optimisations seront possibles ! Enfin, on observe quelques autres
+fonctions de physique (\enquote{vorticityConfinement()}, \enquote{advect()},
+\enquote{buoyancy()}) ou des fonctions de mathématiques (\enquote{sqrt()},
+\enquote{abs()}) qui gravitent autour des fonctions précédemment décrites.
+Enfin, une fonction semble être appelée par quasiment toutes les autres de
+manière récursive : la fonction \enquote{build\_index()} . Cette fonction, très
+courte, permet de passer d’un couple de coordonnées $(i, j)$ identifiant une
+donnée à un offset correspondant à son emplacement mémoire par rapport à la base
+de la matrice. Cette fonction, présente à de nombreux endroits dans le code,
+devrait aussi avoir droit à une attention particulière.
+
 \section{Protocole expérimental}
 \label{sec.prot}
+
+La mise en place d’un protocole expérimental de mesure est une étape nécessaire
+et cruciale dans tout optimisation de code. D’une part, le but de ce protocole
+est de mettre en lumière les points chauds du programme, c’est-à-dire les
+parties du code qui ralentissent considérablement l’exécution de la simulation.
+Ces points chauds seront les cibles de nos optimisations. D’autre part, après
+chaque tentative d’optimisation, le protocole doit nous permettre de mesurer
+l’impact de cette dernière, qu’il soit positif ou négatif, et enfin de le
+quantifier.
 
 \subsection{Théorie}
 \label{sub.prot.theo}
 
+Le protocole se doit d’être le plus représentatif possible d’une utilisation
+typique du programme. Pour cela, on ne doit pas uniquement mesurer la simulation
+exécutant une fonctionnalité particulière, mais l’ensemble des fonctionnalités.
+Il est bon de noter que ceci est vrai dans le cas d’un unique protocole, comme
+ici : en effet, on pourrait imaginer plusieurs protocoles différents pour
+optimiser chaque fonctionnalité indépendamment des autres. Ici, le programme
+nous offre deux fonctionnalités : ajouter de la fumée dans un espace confiné et
+ajouter une vélocité (c’est-à-dire un vecteur vitesse) modifiant ainsi la
+trajectoire de la fumée. Notre protocole doit donc faire intervenir ces deux
+possibilités dans notre expérience.
+
+Lors de nos expériences, il ne faut pas oublier que le hasard ou l’aléa des
+mesures peuvent biaiser un résultat. Afin d’éviter cela, il faut donc utiliser
+une valeur moyenne ou une valeur médiane.
+
 \subsection{Pratique}
 \label{sub.prot.pract}
 
+Pour effectuer nos mesures, il nous faut utiliser un outil de d’analyse de
+performance. Plusieurs possibilités s’offrent à nous, parmi lesquels nous
+pouvons notamment citer : Performance Counters for Linux (perf), OProfile,
+Gprof, MAQAO, Callgrind/Kcachegrind, et bien d’autre. Parmi ces choix-là, nous
+avons choisis d’utiliser \enquote{perf}. Nous pouvons lui citer plusieurs
+avantages qui nous ont intéressés : intégration en ligne de commande, outil
+bas-niveau, développement stable, accès aux compteurs hardware. Nous pouvons
+donc en déduire que c’est un outil tout à fait adapter à l’analyse de code
+bas-niveau (C, assembleur).
+
+Le programme de simulation utilise une interface graphique pour rentrer en
+interaction avec l’utilisateur. De ce fait, nous ne pouvons pas lui donner un
+jeu de données défini à l’avance qui serais constant entre les différentes
+mesures. Nous devons alors définir des actions à réaliser de la manière la plus
+similaire possible entre les exécutions. De manière \enquote{arbitraire}, nous
+définissions un run de la manière suivante : une fois l’applet lancé, nous
+traçons une ligne de fumée en diagonale, du point en bas à droite au point en
+haut à gauche [clic gauche enfoncé], puis nous refaisons la même opération en
+appliquant une vélocité sur ce trajet [clic droit enfoncé], dans le même sens.
+
+Cependant, même en appliquant les mêmes actions entre chaque expérience, les
+temps d’exécution seront irrémédiablement différents. Dès lors, pour mesurer la
+performance d’une fonction, nous n’allons pas regarder le nombre de cycles
+passés dans cette fonction mais son pourcentage de cycle par rapport à
+l’ensemble du programme. En effet, étant donné que le pourcentage est un rapport
+sur le temps de l’ensemble du programme, ce dernier peux varier tout en gardant
+un pourcentage similaire pour une même fonction, car le nombre de cycles passé
+dans cette fonction augmentera proportionnellement.
+
 \section{Optimisations et mesures}
 \label{sec.optim}
+
+\subsection{Mise en place de la compilation}
+\label{sub.optim.compil}
 
 \subsection{Déroulage de boucle}
 \label{sub.optim.unrol}
