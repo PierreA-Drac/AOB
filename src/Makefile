@@ -1,6 +1,6 @@
-CC=gcc
+CC=clang
 INCLUDE=-I/usr/lib/jvm/java-8-openjdk-amd64/include/ -I/usr/lib/jvm/java-8-openjdk-amd64/include/linux/
-CFLAGS=-c -fpic $(INCLUDE) -g3
+CFLAGS=-c -fpic $(INCLUDE) -g3 -O3
 
 all: core java
 
