@@ -239,7 +239,7 @@ Le déroulement du projet s’est effectué en plusieurs étapes distinctes :
 \section{Analyse du code}
 \label{sec.analyze}
 
-% \VerbatimInput[label=\fbox{\color{red!85!green!85!blue!85!}fluid.cflow},]{callgraph/fluid.cflow}
+% \VerbatimInput[label=\fbox{\color{red!85!green!85!blue!85!}fluid.cflow},]{figures/callgraph/fluid.cflow}
 
 L'analyse du code est la première étape à effectuer afin d'optimiser un code. Il
 s'agit d'identifier les différentes sections et fonctions qui pourraient être
@@ -257,7 +257,7 @@ phénomènes physique.
     \centering
     {
         \scriptsize
-        \escapeus{\includesvg[scale=0.5]{callgraph/fluid.svg}}
+        \escapeus{\includesvg[scale=0.5]{figures/callgraph/fluid.svg}}
     }
     \caption{Graphe d'appel du fichier \textit{fluid.c}}
     \label{fig.analyze.callgraph}
@@ -356,32 +356,147 @@ sur le temps de l’ensemble du programme, ce dernier peux varier tout en gardan
 un pourcentage similaire pour une même fonction, car le nombre de cycles passé
 dans cette fonction augmentera proportionnellement.
 
+Pendant nos expériences, nous choisirons une grille de 225x225 car c’est le
+premier seuil où l’application devient trop lente pour être utilisée sur notre
+machine de test. Cela nous permettre de mieux nous rendre compte de nos
+optimisations.
+
+Lors de nos mesures préliminaires, on observe au maximum un écart de $\pm 5 \%$
+entre les différentes mesures successives. Nous choisissons donc, pour chaque
+résultat, d’effectuer 5 tests et de prendre la valeur médiane : cela nous semble
+suffisant.
+
 \section{Optimisations et mesures}
 \label{sec.optim}
+
+Le compilateur utilisé pour ce projet est \ac{GCC} v8.2.0. La mise en place de
+la compilation consiste à déterminer les bons flags de compilation sur lesquels
+nous allons partir pour optimiser notre code. Nous ajoutons tout d’abord
+\enquote{-g3} afin d’inclure dans le binaire les symboles et informations sur le
+code source. Nous nous assurons que ce flag n’as pas d’incidence sur les
+performances. Ci-dessous les résultats des analyses du projet au départ, avec
+\ac{GCC} :
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.62]{figures/optims/gcc-O0/global.png}
+    \caption{Profilage global avec \ac{GCC} en \enquote{-O0}}
+    \label{fig.optim.global}
+\end{figure}
+
+Comme nous pouvions l’imaginer, la Figure~\ref{fig.optim.global} nous confirme
+que les fonctions les plus chaudes sont \enquote{linearSolver()} et
+\enquote{build\_index()}, la première de par sa nature de calcul intensif, la
+deuxième du fait qu’elle soit appelée énormément de fois. On remarque que toutes
+les autres fonctions sont d’une importance mineure dans le temps d’exécution du
+programme : inférieure à $3\%$ pour la plus chaude. À elle seule, la fonction
+\enquote{linearSolver()} prend presque $50\%$ du temps d’exécution du
+programme : c’est la plus importante.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.6]{figures/optims/gcc-O0/linearSolver-others.png}
+    \\ \phantom{ } \\
+    \includegraphics[scale=0.5]{figures/optims/gcc-O0/linearSolver-div.png}
+    \caption{Profilage de \enquote{linearSolver()} avec \ac{GCC} en \enquote{-O0}}
+    \label{fig.optim.linearSolver}
+\end{figure}
+
+La Figure~\ref{fig.optim.linearSolver} nous permet d'analyser quelles
+instructions de la fonction \enquote{linearSolver()} ont un impact important sur
+le temps d’exécution. La première image nous montre un lot successif
+d’instructions prenant chacune 1 à 4\% du temps d’exécution : des \textit{add},
+\textit{mul}, \textit{mov}, \textit{lea}. La deuxième image met en évidence une
+instruction \textit{div} qui prends à elle seule $16\%$ du temps de la fonction.
+On identifie donc parfaitement les deux sources de ralentissement de la
+fonction : la première étant un trop grand nombre d’instructions pour effectuer
+les calculs et la seconde étant la division.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.40]{figures/optims/gcc-O0/build_index.png}
+    \\ \phantom{ } \\
+    \includegraphics[scale=0.55]{figures/optims/gcc-O0/build_index@plt.png}
+    \caption{Profilage de \enquote{build\_index()} et \enquote{build\_index()@plt} avec \ac{GCC} en \enquote{-O0}}
+    \label{fig.optim.build_index}
+\end{figure}
+
+Le temps passé dans la fonction \enquote{build\_index()} est divisé
+équitablement en \textit{mov}/\textit{add} d'après la
+Figure~\ref{fig.optim.build_index}, permettant de faire les deux additions et la
+multiplication que doit faire la fonction. On remarque tout de même que $32\%$
+du temps de la fonction est passé dans la mise en place de la stack frame de la
+fonction (2 premières instructions \textit{mov}). Enfin, on remarquera que $7\%$
+du temps de la simulation est passée dans la fonction \enquote{build\_index@plt}.
+Pour comprendre d’où vient cette fonction, il faut revenir sur les bases du
+fonctionnement du chargement dynamique de code. Afin d’avoir des bibliothèques
+partagées qui puissent être chargées qu’une seule fois en mémoire mais à des
+emplacements indépendants pour deux processus différents, on utilise un
+mécanisme de code à position indépendante (\ac{PIC}). Ce système fait recours à
+une \ac{GOT} contenant les adresses des variables et fonctions dont
+l’emplacement n’est pas connu au moment de la compilation. Cette \ac{GOT} est
+consultée par les fonctions contenues dans la \ac{PLT}, une table contenant des
+fonctions \textit{stubs} (wrapper) qui sont appelées à la place de la vraie
+fonction. Cette fonction stub (@plt) permet d’aller consulter la \ac{GOT}, de
+remplir la \ac{GOT} lors du premier appel (\textit{lazy loader}), enfin
+d’exécuter la vraie fonction. Toutes les prochaines fois ou la fonction stub
+sera appelée, alors on va directement chargé l’adresse contenu dans la
+\textit{GOT} pour appeler la fonction désirée.
 
 \subsection{Mise en place de la compilation}
 \label{sub.optim.compil}
 
-\subsection{Déroulage de boucle}
-\label{sub.optim.unrol}
+Premièrement, nous avons testé les flags suivants activant des options de lot
+d’optimisation : \enquote{-O1}, \enquote{-O2}, \enquote{-O3} (agressivité au
+détriment de la taille du code généré), \enquote{-Os} (optimisation de la taille
+du code). L’utilisation d’un de ces flags nous apporte une légère amélioration
+de fluidité visuelle, cependant il se trouve que nous n’avons pas observé de
+différence majeure entre ces 4 différentes flags, que ce soit en termes de code
+généré ou de performances et répartition du temps entre les fonctions.
+Ci-dessous les images des résultats avec \ac{GCC} et \enquote{-O2} :
+% TODO
 
-\subsection{Vectorisation}
-\label{sub.optim.vec}
+Nous avons aussi testé les performances du programme avec
+\enquote{Clang/\ac{LLVM}}, et les flags d’optimisation les plus agressifs
+(\enquote{-03}). Ci-dessous les images des résultats avec Clang et \enquote{-O3}
+:
+% TODO
+
+Nous observons donc un net gain à utiliser Clang par rapport à \ac{GCC}.
+Cependant, pour nous permettre d’appliquer des optimisations vu en cours à la
+main, nous allons opter pour la version que produit \ac{GCC} comme base de
+travail.
 
 \subsection{Inlining}
 \label{sub.optim.inlin}
 
+TODO
+
+\subsection{Déroulage de boucle}
+\label{sub.optim.unrol}
+
+TODO
+
+\subsection{Vectorisation}
+\label{sub.optim.vec}
+
+TODO
+
 \section{Conclusion}
 \label{sec.conc}
+
+TODO
 
 \newpage
 \section*{Acronymes}
 \label{sec.acro}
 
 \begin{acronym}
-    \acro{CPU}  {Central Processing Unit\acroextra{, processeur central de l'ordinateur}}
-    \acro{RAM}  {Random Access Memory}
-    \acro{HT}   {Hyper-Threading}
+    \acro{GCC}  {GNU Compiler Collection}
+    \acro{LLVM} {Low Level Virtual Machine}
+    \acro{PIC}  {Position-Independent Code}
+    \acro{GOT}  {Global Offset Table}
+    \acro{PLT}  {Procedure Linkage Table}
 \end{acronym}
 
 \end{document}
