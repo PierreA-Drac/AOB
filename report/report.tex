@@ -520,10 +520,7 @@ les options de compilation les plus agressives, on voit que le temps passés dan
 la fonction \enquote{linearSolver()} est passé de 57\% avec \ac{GCC} à 80\%.
 Encore une fois, cela veux dire que les autres fonctions ont été encore plus
 radicalement minimisées. On notera aussi les fonctions \enquote{build\_index()}
-et \enquote{build\_index@plt} ont complètement été supprimés. On observe aussi
-de nouvelles fonctions qui sont apparues, tel que
-\enquote{\_\_memmove\_avx\_unaligned\_erms()}, qui sous-entends une possible
-vectorisation avec les instructions apportées par \ac{AVX}.
+et \enquote{build\_index@plt} ont complètement été supprimés.
 
 \begin{figure}
     \centering
@@ -545,7 +542,64 @@ produit \ac{GCC} comme base de travail.
 \subsection{Inlining}
 \label{sub.optim.inlin}
 
-TODO
+Comme vu dans la section précédente, la fonction \enquote{build\_index()} était
+très consommatrice en cycle (malgré l’optimisation du passage de paramètres par
+les registres plutôt que par la pile) à cause de 2 phénomènes :
+\begin{enumerate}
+    \item L’appel de la fonction, qui passe par deux indirections du fait de la
+        \ac{PLT}, nous fait exécuter des instructions supplémentaires.
+    \item Les branchements dans le code ne favorise pas le principe de localité
+        des caches.
+\end{enumerate}
+
+Une optimisation bien connue consiste donc à \textit{inliner} une fonction :
+cela revient à remplacer automatiquement lors de la compilation, dans le code
+généré du binaire, tous les appels à ladite fonction par le corps de la
+fonction. Cela à pour avantage de réduire considérablement le temps
+d’utilisation d’une fonction (plus de branchement ni de passage de paramètre).
+Cependant, cela peux grossir de manière drastique la taille du code si la
+fonction inliner est une longue fonction : ce qui n’est pas le cas ici, de toute
+évidence.
+
+Pour procéder à l’inlining, cela est très simple puisqu’il suffit de l’indiquer
+au compilateur avec le mot clé approprié. On passe donc du code
+suivant (Listing~\ref{lst.optim.inlin}) à la ligne 1 à celui de la ligne 2.
+
+\begin{listing}[h]
+    \begin{minted}[linenos,numbersep=5pt,frame=lines,framesep=2mm]{C}
+int build_index(int i, int j, int grid_size)
+inline int build_index(int i, int j, int grid_size)
+    \end{minted}
+    \caption{Fonction \enquote{build\_index()} avant et après inlining}
+    \label{lst.optim.inlin}
+\end{listing}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.55]{figures/optims/inlining/global.png}
+    \caption{Profilage global après inlining de la fonction \enquote{build\_index()}}
+    \label{fig.optim.inlin.global}
+\end{figure}
+
+En termes de gain, la fluidité visuelle est grandement améliorée et tout de
+suite remarquable grâce à l’inlining. Par le profilage globale
+(Figure~\ref{fig.optim.inlin.global}), on peut observer que les fonctions
+\enquote{build\_index()} et \enquote{build\_index@plt} ont été complètement
+supprimées et que l’on est passé d’un temps de $56\%$ dans la fonction
+\enquote{linearSolver()} à maintenant $74\%$, ce qui est bon signe : il faut
+maintenant se concentrer sur l’optimisation de cette fonction.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.37]{figures/optims/inlining/linearSolver.png}
+    \caption{Profilage de \enquote{linearSolver()} après inlining de la fonction \enquote{build\_index()}}
+    \label{fig.optim.inlin.linearSolver}
+\end{figure}
+
+Concernant le code de la fonction \enquote{linearSolver()}, on observe dans la
+Figure~\ref{fig.optim.inlin.linearSolver} qu’il a été considérablement réduit et
+compacté, il ressemble maintenant fortement au code créer par Clang, décrit
+dans la section précédente.
 
 \subsection{Déroulage de boucle}
 \label{sub.optim.unrol}
