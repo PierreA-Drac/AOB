@@ -7,7 +7,7 @@
 /*
  * function used to compute the linear position in a vector express as coordinate in a two-D structure
  */
-int build_index(int i, int j, int grid_size)
+inline int build_index(int i, int j, int grid_size)
   {
   return (i + (grid_size + 2) * j);
   }
