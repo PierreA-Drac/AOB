@@ -87,20 +87,26 @@ static void setBoundry(int b, float* x, int grid_size)
  * Iterative linear system solver using the Gauss-sidel
  * relaxation technique. Room for much improvement here...
  */
-static void linearSolver(float* x, float* x0, const float a, const float c, const int grid_size)
-  {
-  int i,j,k;
 
-  for (k = 0; k < 20; k++)
-    {
-    for (i = 1; i <= grid_size; i++)
-      {
-      for (j = 1; j <= grid_size; j++)
-        {
-        x[build_index(i, j, grid_size)] = (a * ( x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)] +   x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]) +  x0[build_index(i, j, grid_size)]) / c;
+static void linearSolver(float* x, float* x0, const float a, const float c, const int grid_size)
+{
+    int i, j, k;
+    // a is apparently always equal to 0 (likely) or 1 (rarely).
+    // c is apparently always equal to 1 (likely) or 4 (rarely).
+    const int inv_a = !(int)a;
+    const float inv_c = 1. / c;
+    for (k = 0; k < 20; k++) {
+        for (i = 1; i <= grid_size; i++) {
+            for (j = 1; j <= grid_size; j++) {
+                x[build_index(i, j, grid_size)] = 
+                    ((inv_a ? 0 :
+                      ((x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)]) +
+                       (x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]))
+                     ) + x0[build_index(i, j, grid_size)]
+                    ) * inv_c;
+            }
         }
-      }
-    setBoundry(0, x, grid_size);
+        setBoundry(0, x, grid_size);
     }
 }
 
@@ -289,11 +295,13 @@ static void project(float* x, float* y, float* p, float* div, float dt, int grid
  {
  int i, j;
     
+ const float tmp1 = -0.5f * (1. / grid_size);
+ const float tmp2 = 0.5f * grid_size;
  for (i = 1; i <= grid_size; i++)
    {
    for (j = 1; j <= grid_size; j++)
      {
-     div[build_index(i, j, grid_size)] = (x[build_index(i+1, j, grid_size)] - x[build_index(i-1, j, grid_size)] + y[build_index(i, j+1, grid_size)] - y[build_index(i, j-1, grid_size)]) * - 0.5f / grid_size;
+     div[build_index(i, j, grid_size)] = (x[build_index(i+1, j, grid_size)] - x[build_index(i-1, j, grid_size)] + y[build_index(i, j+1, grid_size)] - y[build_index(i, j-1, grid_size)]) * tmp1;
      p[build_index(i, j, grid_size)] = 0;
      }
    }
@@ -305,8 +313,8 @@ static void project(float* x, float* y, float* p, float* div, float dt, int grid
    {
    for (j = 1; j <= grid_size; j++)
      {
-     x[build_index(i, j, grid_size)] -= 0.5f * grid_size * (p[build_index(i+1, j, grid_size)] - p[build_index(i-1, j, grid_size)]);
-     y[build_index(i, j, grid_size)] -= 0.5f * grid_size * (p[build_index(i, j+1, grid_size)] - p[build_index(i, j-1, grid_size)]);
+     x[build_index(i, j, grid_size)] -= tmp2 * (p[build_index(i+1, j, grid_size)] - p[build_index(i-1, j, grid_size)]);
+     y[build_index(i, j, grid_size)] -= tmp2 * (p[build_index(i, j+1, grid_size)] - p[build_index(i, j-1, grid_size)]);
      }
    }
   setBoundry(1, x, grid_size);

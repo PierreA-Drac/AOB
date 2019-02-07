@@ -648,6 +648,173 @@ prochaines optimisations.
 \subsection{Modification des calculs}
 \label{sub.optim.cacl}
 
+Comme nous pouvions le voir dans les sections précédentes, ils nous faillait
+maintenant nous concentrer sur le cœur de calcul de \enquote{linearSolver()}.
+L’instruction la plus problématique était la division, suivi de la
+multiplication puis des additions. Analysons la situation : pour cela, nous
+avons déterminé les différentes valeurs que pouvait prendre les variables de la
+fonction, puis nous avons affiché en temps réel les valeurs des variables avec
+un compteur permettant de savoir combien de fois quelle variable à pris quelle
+valeur.
+
+\subsubsection{Multiplcation}
+\label{sub.optim.calc.mul}
+
+Nous avons d’abord analysé la variable \enquote{$a$}, celle qui se retrouve dans
+la multiplication. Il se trouve que cette variable ne prend que les valeurs 1 ou
+0 : il s’agit en réalité d’un booléen, bien que le type soit un float. Cette
+variable multiplie une suite de 3 additions : si \enquote{$a$} est à 1, alors on
+garde les 3 additions ; si la variable est à 0, alors il ne faut pas faire les
+additions. De toute évidence, cette variable n’est là que pour contrôler le fait
+de garder ou non les additions et n’est pas là pour effectuer une mise à
+l’échelle par un facteur précis. Dès lors, si la variable est à 0, notre
+programme va faire les 3 additions pour ensuite les multiplier avec 0 : c’est
+une grosse perte de temps. On conseille souvent d’éviter les branchements dans
+une boucle, mais il se trouve qu’ici, avoir un branchement (quelques cycles, 2 à
+4) permettrait d’éviter :
+\begin{enumerate}
+    \item Pire des cas : 1 multiplication (quelques cycles, 2 à 4).
+    \item Meilleur des cas : 1 multiplication et 3 additions (plus d’une
+        dizaine de cycles, 10 à 15).
+\end{enumerate}
+Les cycles ont étés pris pour un processeur \textit{Sandy Bridge} sur les
+documents d’\textbf{Agner Fog}. Un branchement permet donc clairement d’être
+gagnant s’il est assez prédictible.
+
+\begin{listing}
+    \begin{minted}[linenos,numbersep=5pt,frame=lines,framesep=2mm]{C}
+const int inv_a = !(int)a;
+[...]
+((inv_a ? 0 :
+  ((x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)]) +
+   (x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]))
+ ) + x0[build_index(i, j, grid_size)]
+) / c;
+    \end{minted}
+    \caption{Résultat de la modification de la multiplication}
+    \label{lst.optim.calc.mul}
+\end{listing}
+
+Nous avons donc procéder de la manière suivante, visible sur le
+Listing~\ref{lst.optim.calc.mul} : nous faisons un \textit{NOT} de la variable
+dans une autre variable, déclaré constante. Nous prenons garde à stocker le
+résultat dans un \textit{int} et à faire un \textit{cast} au préalable : de
+cette manière, \ac{GCC} va générer une instruction \textit{test} plutôt qu’une
+instruction \textit{ucomiss} (plus coûteuse) pour effectuer la comparaison. Nous
+stockons le \textit{NOT} dès le début de la fonction pour ne pas avoir à le
+calculer à chaque itération de la boucle, et nous voulons le \textit{NOT} afin
+de faire arriver le cas où \enquote{$a$} est à 0 en premier. En effet, nous
+avons testé un grand nombre de scénarios pour trouver dans quelle configuration
+le code généré et la prédiction de branchement fonctionnait au mieux :
+\begin{enumerate} \item Tentative de faire intervenir le cas le plus fréquent en
+            premier, puis en second. \item Utilisation de \textit{if-else} ou
+            d’opérateur ternaire. \item Séparation du résultat dans une variable
+            temporaire, ou calcul inliner. \item Utilisation d’un
+                \textit{builtin} afin d’indiquer à \ac{GCC} la branche la plus
+prise, ou de laisser totalement la main au processeur. \end{enumerate} Il se
+trouve que finalement, la combinaison qui fonctionnait de manière la plus
+optimale possible se trouve être : \begin{enumerate} \item Le cas le plus
+        fréquent en premier. \item Utilisation d’un opérateur ternaire. \item
+        Calcul \textit{inliner}. \item Ne pas indiquer à \ac{GCC} la branche la
+            plus souvent prise (le \acs{CPU} se débrouille très bien tout seul
+!). \end{enumerate}
+
+À noter que pour les 3 additions, nous les avons regroupés depuis la forme $(a +
+b + c + d)$ vers la forme $((a + b) + (c + d))$. Cela permet d’expliciter la
+non-dépendance des opérations dans cette chaîne, et ainsi de laisser le
+\acs{CPU} commencer le calcul de $(c + d)$ avant la fin de $(a + b)$.
+
+\subsubsection{Division}
+\label{sub.optim.calc.div}
+
+La deuxième optimisation majeure est la suppression de la division. Comme vu sur
+la Figure~\ref{fig.optim.inlin.linearSolver}, la division prenait un peu plus de
+$30\%$ du temps d’exécution de notre fonction, ce qui est énorme. Nous avons
+donc analyser la variable \enquote{$c$} : il se trouve que cette variable prends
+la valeur 1 avec une probabilité de $\frac{2}{3}$ et la valeur 4 avec une
+probabilité de $\frac{1}{3}$. Diviser par 1 revient à ne pas diviser, et diviser
+par 4 reviens à multiplier par $0,25$. Nous calculons donc l’inverse de la
+variable au début de la fonction, et nous multiplions le tout par cette variable
+plutôt que d’effectuer une division coûteuse à chaque itération : soit on
+multiplie par 1, soit on multiplie par $0.25$. Ici, l’utilisation d’un
+branchement pour ne pas multiplier lorsque \enquote{$c$} est égal à 1 était tout
+aussi coûteux que de multiplier par 1, donc inutile.
+
+\begin{listing}
+    \begin{minted}[linenos,numbersep=5pt,frame=lines,framesep=2mm]{C}
+const float inv_c = 1. / c;
+[...]
+((inv_a ? 0 :
+  ((x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)]) +
+   (x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]))
+ ) + x0[build_index(i, j, grid_size)]
+) * inv_c;
+    \end{minted}
+    \caption{Résultat de la suppression de la division}
+    \label{lst.optim.calc.div}
+\end{listing}
+
+\subsubsection{Invariants}
+\label{sub.optim.calc.inv}
+
+\begin{listing}
+    \begin{minted}[linenos,numbersep=5pt,frame=lines,framesep=2mm]{C}
+const float tmp1 = -0.5f * (1. / grid_size);
+const float tmp2 = 0.5f * grid_size;
+[...]
+for (j = 1; j <= grid_size; j++) {
+    div[build_index(i, j, grid_size)] = tmp1 * (x[build_index(i+1, j,
+        grid_size)] - [...]);
+}
+[...]
+for (j = 1; j <= grid_size; j++) {
+    x[build_index(i, j, grid_size)] -= tmp2 * [...];
+    y[build_index(i, j, grid_size)] -= tmp2 * [...];
+}
+    \end{minted}
+    \caption{Calcul préalable d'invariants de boucle}
+    \label{lst.optim.calc.inv}
+\end{listing}
+
+Nous avons procédés à quelques légères optimisations dans la fonction
+\enquote{project()} : en effet, des invariants de boucle étaient présents et
+pouvaient être pré-calculé. Un invariant de boucle est, ici, un groupe de calcul
+calculé à chaque itération inutilement alors qu’il pourrait être calculé avant
+ladite boucle. Vous pouvez observer l’optimisation sur le
+Listing~\ref{lst.optim.calc.inv}.
+
+\subsubsection{Résultat}
+\label{sec.optim.calc.res}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.55]{figures/optims/computing/global.png}
+    \caption{Profilage global après modifications des calculs}
+    \label{fig.optim.calc.global}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.55]{figures/optims/computing/linearSolver.png}
+    \caption{Profilage de \enquote{linearSolver()} après modifications des calculs}
+    \label{fig.optim.calc.linearSolver}
+\end{figure}
+
+Tout d’abord, d’expérience utilisateur, ces optimisations sont un franc succès.
+Le mode de résolution \enquote{255x255} peut enfin être utilisé sur
+notre machine de test de manière tout à fait confortable, avec environ 60 images
+par secondes (ressentit).
+
+Sur la Figure~\ref{fig.optim.calc.global}, on observe un net changement de
+répartition de temps de calcul : \enquote{linearSolver()}, qui prenant
+auparavant $75\%$ du programme, n’en prends maintenant que $54\%$ ! On obtient
+donc un gain d’environ $20\%$, ce qui est non-négligeable.
+
+Sur la Figure~\ref{fig.optim.calc.linearSolver}, on peut observer nos
+changements effectués : un \textit{mul} a disparu, le \textit{div} a été
+remplacé par un \textit{mul}, un \textit{test} et un \textit{je} sont apparu...
+De nouvelles instructions qui ont la même fonction que les anciennes, mais qui
+consomment moins de temps.
 
 \subsection{Déroulage de boucle}
 \label{sub.optim.unrol}
@@ -682,6 +849,7 @@ TODO
     \acro{AVX}  {Advanced Vector Extensions}
     \acro{SSE}  {Streaming SIMD Extensions}
     \acro{IEEE} {Institute of Electrical and Electronics Engineers}
+    \acro{CPU}  {Central Processing Unit}
 \end{acronym}
 
 \end{document}
