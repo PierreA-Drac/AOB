@@ -539,6 +539,16 @@ soit visuel ou factuel. Cependant, pour nous permettre d’appliquer des
 optimisations vu en cours à la main, nous allons opter pour la version que
 produit \ac{GCC} comme base de travail.
 
+Enfin, nous noterons que nous avons aussi essayé d’utiliser l’option
+d’optimisation \enquote{-Ofast} avec \ac{GCC}. Ce fut un succès visuel puisque
+l’accélération était nettement présente, cependant nous avons préféré ne pas
+laisser cette option activée : ce flag permet d’activer des optimisations
+mathématiques, notamment sur les flottants, en autorisant des arrondis et le
+non-respect de certains standards de l'\ac{IEEE}. N’ayant aucun moyen de vérifier par
+nous même si les calculs sont encore de la précision voulue avec ce flag, nous
+préférons ne pas tenter une opération qui pourrait remettre en cause la validité
+de la simulation.
+
 \subsection{Inlining}
 \label{sub.optim.inlin}
 
@@ -601,6 +611,44 @@ Figure~\ref{fig.optim.inlin.linearSolver} qu’il a été considérablement réd
 compacté, il ressemble maintenant fortement au code créer par Clang, décrit
 dans la section précédente.
 
+\subsection{Mots-clés appropriés}
+\label{sub.optim.keywords}
+
+Les mots-clés peuvent souvent faire une différence capitale dans le processus
+d’optimisation du compilateur. En effet, de nombreuses optimisations ne peuvent
+être effectuées que sous réserve de certaines conditions, par exemple : qu’une
+variable ne soient pas modifié par un autre thread ou encore qu’une variable
+soit constante. Nous disposons, en C, des mots-clés (entre autres)
+\enquote{static} et \enquote{const} qui sont très utiles pour indiquer ce genre
+de cas et bien d’autres encore. Après avoir appliqué le mot-clé \enquote{static}
+à toutes les fonctions (hormis les 2 points d’entrée de la bibliothèque) afin
+d’indiquer qu’elles sont locales au module compilé (améliorant par exemple
+l’\textit{inlining} automatique) et le mot-clé \enquote{const} aux variables
+constantes de la fonction \enquote{linearSolver()}, nous obtenons le résultat de
+la Figure~\ref{fig.optim.keywords.global} au profilage.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.55]{figures/optims/keywords/global.png}
+    \caption{Profilage global après ajouts des mots-clés appropriés}
+    \label{fig.optim.keywords.global}
+\end{figure}
+
+Le suffix \enquote{.isra.constprop} signifie que \ac{GCC} à automatiquement
+effectué une propagation de constante et/ou a retiré des paramètres inutiles. À
+partir de cette information, nous nous sommes rapidement rendu compte qu’il y
+avait des variables inutiles passées à \enquote{linearSolver()} : \enquote{$dt$}
+n’était jamais utilisé, et \enquote{$b$} était toujours égal à 0. Nous avons
+donc nous-mêmes supprimé ces variables dans la fonction.
+
+Il n’y à pas de gain de performance visible ou mesurable, cependant cela
+éclairci le code source et facilitera peut-être l’analyse du compilateur pour de
+prochaines optimisations. 
+
+\subsection{Modification des calculs}
+\label{sub.optim.cacl}
+
+
 \subsection{Déroulage de boucle}
 \label{sub.optim.unrol}
 
@@ -608,6 +656,11 @@ TODO
 
 \subsection{Vectorisation}
 \label{sub.optim.vec}
+
+TODO
+
+\subsection{Parallélisation}
+\label{sub.optim.parall}
 
 TODO
 
@@ -628,6 +681,7 @@ TODO
     \acro{PLT}  {Procedure Linkage Table}
     \acro{AVX}  {Advanced Vector Extensions}
     \acro{SSE}  {Streaming SIMD Extensions}
+    \acro{IEEE} {Institute of Electrical and Electronics Engineers}
 \end{acronym}
 
 \end{document}

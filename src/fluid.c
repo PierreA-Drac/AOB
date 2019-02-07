@@ -7,7 +7,7 @@
 /*
  * function used to compute the linear position in a vector express as coordinate in a two-D structure
  */
-inline int build_index(int i, int j, int grid_size)
+static inline int build_index(int i, int j, int grid_size)
   {
   return (i + (grid_size + 2) * j);
   }
@@ -17,7 +17,7 @@ inline int build_index(int i, int j, int grid_size)
  *
  */
 
-void swap(float *d, float *dOld, int vector_size)
+static void swap(float *d, float *dOld, int vector_size)
   { 
   int i;
   float tmp;
@@ -34,7 +34,7 @@ void swap(float *d, float *dOld, int vector_size)
  * addSource: TO COMMENT
  */
 
-void addSource(float *x, float *x0, int vector_size, float factor)
+static void addSource(float *x, float *x0, int vector_size, float factor)
   {
   int i;
 
@@ -49,7 +49,7 @@ void addSource(float *x, float *x0, int vector_size, float factor)
  * specifies simple boundry conditions.
  */
 
-void setBoundry(int b, float* x, int grid_size)
+static void setBoundry(int b, float* x, int grid_size)
   {
   int i;
 
@@ -86,10 +86,8 @@ void setBoundry(int b, float* x, int grid_size)
 /*
  * Iterative linear system solver using the Gauss-sidel
  * relaxation technique. Room for much improvement here...
- *
  */
-
-void linearSolver(int b, float* x, float* x0, float a, float c, float dt, int grid_size)
+static void linearSolver(float* x, float* x0, const float a, const float c, const int grid_size)
   {
   int i,j,k;
 
@@ -102,9 +100,9 @@ void linearSolver(int b, float* x, float* x0, float a, float c, float dt, int gr
         x[build_index(i, j, grid_size)] = (a * ( x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)] +   x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]) +  x0[build_index(i, j, grid_size)]) / c;
         }
       }
-    setBoundry(b, x, grid_size);
+    setBoundry(0, x, grid_size);
     }
-  }
+}
 
 /*
  * Recalculate the input array with diffusion effects.
@@ -116,11 +114,11 @@ void linearSolver(int b, float* x, float* x0, float a, float c, float dt, int gr
  * TO COMMENT
  */
 
-void diffuse(int b, float* c, float* c0, float diff, float dt, int grid_size)
+static void diffuse(int b, float* c, float* c0, float diff, float dt, int grid_size)
   {
   float a = dt * diff * grid_size * grid_size;
 
-  linearSolver(b, c, c0, a, 1 + 4 * a, dt, grid_size);
+  linearSolver(c, c0, a, 1 + 4 * a, grid_size);
   }
 
 
@@ -131,7 +129,7 @@ void diffuse(int b, float* c, float* c0, float diff, float dt, int grid_size)
  * velocity vector at (i, j).
  *
  */
-float calculate_curl(int i, int j, int grid_size, float *u, float *v)
+static float calculate_curl(int i, int j, int grid_size, float *u, float *v)
   {
   float du_dy = (u[build_index(i, j + 1, grid_size)] - u[build_index(i, j - 1, grid_size)]) * 0.5f;
   float dv_dx = (v[build_index(i + 1, j, grid_size)] - v[build_index(i - 1, j, grid_size)]) * 0.5f;
@@ -142,7 +140,7 @@ float calculate_curl(int i, int j, int grid_size, float *u, float *v)
 /*
  * buoyancy: TO COMMENT
  */
-float buoyancy(float *dst, float *src, int grid_size)
+static float buoyancy(float *dst, float *src, int grid_size)
   {
   float Tamb = 0;
   float a = 0.000625f;
@@ -182,7 +180,7 @@ float buoyancy(float *dst, float *src, int grid_size)
  * MORE COMMENT
  */
 
-void advect(int b, float* d, float* d0, float* du, float* dv, int grid_size, float dt)
+static void advect(int b, float* d, float* d0, float* du, float* dv, int grid_size, float dt)
   {
   int i, j;
   int i0, j0, i1, j1;
@@ -231,7 +229,7 @@ void advect(int b, float* d, float* d0, float* du, float* dv, int grid_size, flo
  * add force perpendicular to N.
  *
  */
-void vorticityConfinement(float* Fvc_x, float* Fvc_y, float *curl, float *u, float *v, int grid_size)
+static void vorticityConfinement(float* Fvc_x, float* Fvc_y, float *curl, float *u, float *v, int grid_size)
   {
   int i,j;
   float dw_dx, dw_dy;
@@ -287,7 +285,7 @@ void vorticityConfinement(float* Fvc_x, float* Fvc_y, float *curl, float *u, flo
  *
  */
 
-void project(float* x, float* y, float* p, float* div, float dt, int grid_size)
+static void project(float* x, float* y, float* p, float* div, float dt, int grid_size)
  {
  int i, j;
     
@@ -301,7 +299,7 @@ void project(float* x, float* y, float* p, float* div, float dt, int grid_size)
    }
  setBoundry(0, div, grid_size);
  setBoundry(0, p, grid_size);
- linearSolver(0, p, div, 1, 4, dt, grid_size);
+ linearSolver(p, div, 1, 4, grid_size);
 
  for (i = 1; i <= grid_size; i++)
    {
@@ -387,6 +385,3 @@ void c_velocitySolver( float *u, float *uOld, float *v, float *vOld, float *curl
       vOld[i] = 0; 
       }
   }
-
-
-
