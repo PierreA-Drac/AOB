@@ -816,6 +816,85 @@ remplacé par un \textit{mul}, un \textit{test} et un \textit{je} sont apparu...
 De nouvelles instructions qui ont la même fonction que les anciennes, mais qui
 consomment moins de temps.
 
+\subsection{Mémoire cache}
+\label{sub.optim.cache}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.50]{figures/optims/cache/global-before.png}
+    \caption{Profilage global avant opitmisation du cache}
+    \label{fig.optim.cache.before}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.55]{figures/optims/cache/global-after.png}
+    \caption{Profilage global après opitmisation du cache}
+    \label{fig.optim.cache.after}
+\end{figure}
+
+Maintenant que la simulation fonctionne de manière très satisfaisante avec une
+résolution de \enquote{225x225}, nous passons nos mesures sur la résolution
+\enquote{450x450}, qui n’est toujours pas fluide. Nous pouvons observer le
+résultat de la mesure avant la prochaine optimisation sur la
+Figure~\ref{fig.optim.cache.before} : notre fonction \enquote{linearSolver()}
+prends $62\%$ de notre temps d’exécution.
+
+Dans cette partie, nous avons essayé d’optimiser l’utilisation de la mémoire
+cache en améliorant la localité des accès à la mémoire. Pour cela, deux
+techniques ont été mises en œuvres :
+\begin{enumerate}
+    \item Inversion des deux boucles.
+    \item Cache Blocking.
+\end{enumerate}
+
+Pour la première technique, il s’agit d’inverser l’ordre des boucles intérieur
+et extérieur $(i \text{ et } j)$ afin de parcourir les matrices par lignes et
+non par colonnes. Plus la matrice sera grande (et ne rentrera plus entièrement
+dans la mémoire cache), plus l’amélioration sera visible.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.5]{figures/optims/cache/intel.jpg}
+    \caption{Explication de l'effet du cache blocking (source : Intel.com)}
+    \label{fig.optim.cache.intel}
+\end{figure}
+
+Pour la seconde technique, il s’agit de traiter la matrice par bloc carré plutôt
+que la traiter complètement d’un seul coup. Le schéma de la
+Figure~\ref{fig.optim.cache.intel} nous explique le principe très intuitivement.
+Le but de cette manœuvre est de faire tenir le bloc traité dans la mémoire cache
+et ainsi d’avoir un minimum de \textit{cache miss}. Si on traite la matrice
+ligne par ligne mais qu’une ligne est plus grosse que la mémoire cache, alors à
+chaque changement de ligne nous aurions des \textit{cache miss} inutiles. Une
+chose important dans le cache blocking est la taille d’un bloc. Le déterminer de
+manière peut-être une tâche assez ardue dû au décalage entre la théorie et la
+pratique. Dans notre cas, nous l’avons déterminé de manière empirique en
+effectuant plusieurs tests sur notre machine.
+
+Ces deux techniques nous ont permis d’obtenir un léger gain en
+\enquote{450x450}, illustré par la Figure~\ref{fig.optim.cache.after} : nous
+pouvons voir que nous gagnons à peu $7\%$ de temps passé dans la fonction grâce
+à l’optimisation de la mémoire. Si les matrices traités étaient beaucoup plus
+grosses, alors le gain serai beaucoup plus visible. En revanche, si les matrices
+deviennent très petite, alors cette optimisation nous fait perdre du temps dans
+les contrôles de boucle.
+
+Le résultat final de l’optimisation se résume par le code du Listing~\ref{lst.optim.cache}.
+\begin{listing}[h]
+    \begin{minted}[linenos,numbersep=5pt,frame=lines,framesep=2mm]{C}
+#define BLOCK_SIZE 8
+[...]
+for (j = 1; j <= grid_size; j += BLOCK_SIZE) {
+    for (i = 1; i <= grid_size; i += BLOCK_SIZE) {
+        for (jj = j; jj <= j + BLOCK_SIZE && jj <= grid_size; jj++) {
+            for (ii = i; ii <= i + BLOCK_SIZE && ii <= grid_size ; ii++) {
+                x[build_index(ii, jj, grid_size)] = [...]
+    \end{minted}
+    \caption{Cache blocking et inversion des boucles}
+    \label{lst.optim.cache}
+\end{listing}
+
 \subsection{Déroulage de boucle}
 \label{sub.optim.unrol}
 

@@ -1,8 +1,9 @@
- 
 #include <time.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+
+#define BLOCK_SIZE 8
  
 /*
  * function used to compute the linear position in a vector express as coordinate in a two-D structure
@@ -90,20 +91,24 @@ static void setBoundry(int b, float* x, int grid_size)
 
 static void linearSolver(float* x, float* x0, const float a, const float c, const int grid_size)
 {
-    int i, j, k;
+    int i, ii, j, jj, k;
     // a is apparently always equal to 0 (likely) or 1 (rarely).
     // c is apparently always equal to 1 (likely) or 4 (rarely).
     const int inv_a = !(int)a;
     const float inv_c = 1. / c;
     for (k = 0; k < 20; k++) {
-        for (i = 1; i <= grid_size; i++) {
-            for (j = 1; j <= grid_size; j++) {
-                x[build_index(i, j, grid_size)] = 
-                    ((inv_a ? 0 :
-                      ((x[build_index(i-1, j, grid_size)] + x[build_index(i+1, j, grid_size)]) +
-                       (x[build_index(i, j-1, grid_size)] + x[build_index(i, j+1, grid_size)]))
-                     ) + x0[build_index(i, j, grid_size)]
-                    ) * inv_c;
+        for (j = 1; j <= grid_size; j += BLOCK_SIZE) {
+            for (i = 1; i <= grid_size; i += BLOCK_SIZE) {
+                for (jj = j; jj <= j + BLOCK_SIZE && jj <= grid_size; jj++) {
+                    for (ii = i; ii <= i + BLOCK_SIZE && ii <= grid_size ; ii++) {
+                        x[build_index(ii, jj, grid_size)] = 
+                            ((inv_a ? 0 :
+                              ((x[build_index(ii-1, jj, grid_size)] + x[build_index(ii+1, jj, grid_size)]) +
+                               (x[build_index(ii, jj-1, grid_size)] + x[build_index(ii, jj+1, grid_size)]))
+                             ) + x0[build_index(ii, jj, grid_size)]
+                            ) * inv_c;
+                    }
+                }
             }
         }
         setBoundry(0, x, grid_size);
